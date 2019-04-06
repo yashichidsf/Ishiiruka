@@ -243,6 +243,9 @@ set(LIBS
 	sfml-network
 	sfml-system
 	SlippiLib
+	vcdcom
+	vcddec
+	vcdenc
 	videoogl
 	videosoftware
 	z

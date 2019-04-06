@@ -140,7 +140,7 @@ void SlippiReplayComm::loadFile()
 		}
 		else
 		{
-			WARN_LOG(EXPANSIONINTERFACE, "Comm file load error detected. Check file format");
+			//WARN_LOG(EXPANSIONINTERFACE, "Comm file load error detected. Check file format");
 		}
 
 		return;

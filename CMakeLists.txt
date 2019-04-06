@@ -659,9 +659,14 @@ include_directories(Externals/Bochs_disasm)
 
 add_subdirectory(Externals/glslang)
 
+# Slippi additions
 add_subdirectory(Externals/SlippiLib)
 include_directories(Externals/SlippiLib)
 include_directories(Externals/nlohmann)
+
+add_subdirectory(Externals/open-vcdiff)
+include_directories(Externals/open-vcdiff/src/)
+
 
 if(USE_SHARED_ENET)
 	check_lib(ENET libenet enet enet/enet.h QUIET)

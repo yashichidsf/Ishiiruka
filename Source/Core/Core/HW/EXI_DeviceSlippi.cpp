@@ -23,6 +23,56 @@
 #include "Core/HW/Memmap.h"
 #include "Core/NetPlayClient.h"
 
+#include "Core/State.h"
+#include "Core/HW/SystemTimers.h"
+#include "Core/CoreTiming.h"
+#include "Core/Core.h"
+
+#include <google/vcencoder.h>
+#include <google/vcdecoder.h>
+
+static std::vector<u8> savestate[2];
+//static std::vector<char> delta;
+static std::string delta;
+
+static bool doSavestate = false;
+//static std::mutex g_cs_current_buffer;
+
+#define SLEEP_TIME_MS 2000
+void SavestateThread(void)
+{
+	Common::SetCurrentThreadName("Savestate thread");
+	Common::SleepCurrentThread(200);
+	u8 current_slot = 0;
+	u8 previous_slot = 0;
+	bool paused;
+	while (true)
+	{
+		paused = ((Core::GetState() == Core::CORE_PAUSE) || (!doSavestate));
+		if (!paused) 
+		{
+				INFO_LOG(EXPANSIONINTERFACE, "Starting savestate");
+				State::SaveToBuffer(savestate[current_slot]);
+				INFO_LOG(EXPANSIONINTERFACE, "Slot %d,  size: %08x", current_slot, savestate[current_slot].size());
+
+				previous_slot = (current_slot ^ 1);
+				if (savestate[previous_slot].size() != 0)
+				{
+					open_vcdiff::VCDiffEncoder encoder((char*)savestate[current_slot].data(), savestate[current_slot].size());
+					encoder.Encode((char*)savestate[previous_slot].data(), savestate[previous_slot].size(), &delta);
+					INFO_LOG(EXPANSIONINTERFACE, "Delta size: %08x", delta.size());
+				}
+
+				// Switch the current slot
+				current_slot = previous_slot;
+
+				INFO_LOG(EXPANSIONINTERFACE, "Savestate done!");
+		}
+		Common::SleepCurrentThread(SLEEP_TIME_MS);
+	}
+}
+
+
 std::vector<u8> uint16ToVector(u16 num)
 {
 	u8 byte0 = num >> 8;
@@ -71,6 +121,9 @@ CEXISlippi::CEXISlippi()
 
 	// Loggers will check 5 bytes, make sure we own that memory
 	m_read_queue.reserve(5);
+
+	// Spawn thread for savestates
+	m_savestateThread = std::thread(SavestateThread);
 }
 
 CEXISlippi::~CEXISlippi()
@@ -704,6 +757,7 @@ void CEXISlippi::prepareIsFileReady()
 	{
 		replayComm->nextReplay();
 		m_read_queue.push_back(0);
+		doSavestate = false;
 		return;
 	}
 
@@ -718,6 +772,7 @@ void CEXISlippi::prepareIsFileReady()
 		m_read_queue.push_back(0);
 		return;
 	}
+	doSavestate = true;
 
 	INFO_LOG(EXPANSIONINTERFACE, "EXI_DeviceSlippi.cpp: Replay file loaded successfully!?");
 	// Start the playback!
@@ -740,9 +795,9 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
 		bufLoc += receiveCommandsLen + 1;
 	}
 
-	INFO_LOG(EXPANSIONINTERFACE, "EXI SLIPPI DMAWrite: addr: 0x%08x size: %d, bufLoc:[%02x %02x %02x %02x %02x]",
-	         _uAddr, _uSize, memPtr[bufLoc], memPtr[bufLoc + 1], memPtr[bufLoc + 2], memPtr[bufLoc + 3],
-	         memPtr[bufLoc + 4]);
+	//INFO_LOG(EXPANSIONINTERFACE, "EXI SLIPPI DMAWrite: addr: 0x%08x size: %d, bufLoc:[%02x %02x %02x %02x %02x]",
+	         //_uAddr, _uSize, memPtr[bufLoc], memPtr[bufLoc + 1], memPtr[bufLoc + 2], memPtr[bufLoc + 3],
+	         //memPtr[bufLoc + 4]);
 
 	while (bufLoc < _uSize)
 	{
@@ -788,13 +843,13 @@ void CEXISlippi::DMARead(u32 addr, u32 size)
 {
 	if (m_read_queue.empty())
 	{
-		INFO_LOG(EXPANSIONINTERFACE, "EXI SLIPPI DMARead: Empty");
+		//INFO_LOG(EXPANSIONINTERFACE, "EXI SLIPPI DMARead: Empty");
 		return;
 	}
 
 	auto queueAddr = &m_read_queue[0];
-	INFO_LOG(EXPANSIONINTERFACE, "EXI SLIPPI DMARead: addr: 0x%08x size: %d, startResp: [%02x %02x %02x %02x %02x]",
-	         addr, size, queueAddr[0], queueAddr[1], queueAddr[2], queueAddr[3], queueAddr[4]);
+	//INFO_LOG(EXPANSIONINTERFACE, "EXI SLIPPI DMARead: addr: 0x%08x size: %d, startResp: [%02x %02x %02x %02x %02x]",
+	         //addr, size, queueAddr[0], queueAddr[1], queueAddr[2], queueAddr[3], queueAddr[4]);
 
 	// Copy buffer data to memory
 	Memory::CopyToEmu(addr, queueAddr, size);

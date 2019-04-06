@@ -27,6 +27,8 @@ public:
 
 	bool IsPresent() const override;
 
+	std::thread m_savestateThread;
+
 private:
 	enum {
 		CMD_UNKNOWN = 0x0,
