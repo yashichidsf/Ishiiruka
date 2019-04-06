@@ -87,6 +87,8 @@
 class InputConfig;
 class wxFrame;
 
+extern bool g_rewindRequested;
+
 // This override allows returning a fake menubar object while removing the real one from the screen
 wxMenuBar* CFrame::GetMenuBar() const
 {
@@ -1309,8 +1311,17 @@ void CFrame::OnLoadLastState(wxCommandEvent& event)
 	if (Core::IsRunningAndStarted())
 	{
 		int id = event.GetId();
-		int slot = id - IDM_LOAD_LAST_1 + 1;
-		State::LoadLastSaved(slot);
+
+		// Quick hack to test hotkeys
+		if (id == IDM_LOAD_LAST_10)
+		{
+			g_rewindRequested = true;
+		}
+		else
+		{
+			int slot = id - IDM_LOAD_LAST_1 + 1;
+			State::LoadLastSaved(slot);
+		}
 	}
 }
 

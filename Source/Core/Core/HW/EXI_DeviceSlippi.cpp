@@ -32,24 +32,25 @@
 #include <google/vcdecoder.h>
 
 static std::vector<u8> savestate[2];
-//static std::vector<char> delta;
-static std::string delta;
+static std::vector<std::string> dlog;
+static bool inReplay = false;
+bool g_rewindRequested = false;
 
-static bool doSavestate = false;
-//static std::mutex g_cs_current_buffer;
-
-#define SLEEP_TIME_MS 2000
+#define SLEEP_TIME_MS 1000
 void SavestateThread(void)
 {
+	// We crash if I don't sleep here?
 	Common::SetCurrentThreadName("Savestate thread");
 	Common::SleepCurrentThread(200);
+
 	u8 current_slot = 0;
 	u8 previous_slot = 0;
 	bool paused;
 	while (true)
 	{
-		paused = ((Core::GetState() == Core::CORE_PAUSE) || (!doSavestate));
-		if (!paused) 
+		paused = (Core::GetState() == Core::CORE_PAUSE);
+
+		if (!paused && inReplay) 
 		{
 				INFO_LOG(EXPANSIONINTERFACE, "Starting savestate");
 				State::SaveToBuffer(savestate[current_slot]);
@@ -59,7 +60,9 @@ void SavestateThread(void)
 				if (savestate[previous_slot].size() != 0)
 				{
 					open_vcdiff::VCDiffEncoder encoder((char*)savestate[current_slot].data(), savestate[current_slot].size());
+					std::string delta = std::string();
 					encoder.Encode((char*)savestate[previous_slot].data(), savestate[previous_slot].size(), &delta);
+					dlog.push_back(delta);
 					INFO_LOG(EXPANSIONINTERFACE, "Delta size: %08x", delta.size());
 				}
 
@@ -67,6 +70,20 @@ void SavestateThread(void)
 				current_slot = previous_slot;
 
 				INFO_LOG(EXPANSIONINTERFACE, "Savestate done!");
+		}
+
+		// If we aren't playing a replay, free up slots and the delta log?
+		if (!inReplay) 
+		{
+			if (savestate[0].size() != 0)
+				INFO_LOG(EXPANSIONINTERFACE, "Cleared slot 0");
+				std::vector<u8>().swap(savestate[0]);
+			if (savestate[1].size() != 0)
+				INFO_LOG(EXPANSIONINTERFACE, "Cleared slot 1");
+				std::vector<u8>().swap(savestate[1]);
+			if (dlog.size() != 0)
+				INFO_LOG(EXPANSIONINTERFACE, "Cleared dlog (%d entries)", dlog.size());
+				std::vector<std::string>().swap(dlog);
 		}
 		Common::SleepCurrentThread(SLEEP_TIME_MS);
 	}
@@ -757,7 +774,7 @@ void CEXISlippi::prepareIsFileReady()
 	{
 		replayComm->nextReplay();
 		m_read_queue.push_back(0);
-		doSavestate = false;
+		inReplay = false;
 		return;
 	}
 
@@ -772,7 +789,7 @@ void CEXISlippi::prepareIsFileReady()
 		m_read_queue.push_back(0);
 		return;
 	}
-	doSavestate = true;
+	inReplay = true;
 
 	INFO_LOG(EXPANSIONINTERFACE, "EXI_DeviceSlippi.cpp: Replay file loaded successfully!?");
 	// Start the playback!
