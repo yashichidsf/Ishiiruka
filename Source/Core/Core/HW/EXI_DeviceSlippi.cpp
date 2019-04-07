@@ -28,13 +28,32 @@
 #include "Core/CoreTiming.h"
 #include "Core/Core.h"
 
+// Use open-vcdiff to generate diffs between savestates.
+// NOTE: need to patch the max window to >64MB for the decoder to work!
 #include <google/vcencoder.h>
 #include <google/vcdecoder.h>
 
-static std::vector<u8> savestate[2];
 static std::vector<std::string> dlog;
+//static std::map<u32, std::string> state_log;
+
 static bool inReplay = false;
 bool g_rewindRequested = false;
+
+
+/* We use two buffers to handle the current and previous savestate. CURRENT 
+ * refers to the latest state. PREVIOUS refers to the last state. In order to 
+ * preserve this behaviour, SWAP_SLOTS() should always be called immediately 
+ * before you change the contents of 'CURRENT'.
+ */
+
+static std::vector<u8> savestate[2];
+static u8 current_idx = 0;
+
+#define CURRENT		savestate[current_idx]
+#define PREVIOUS	savestate[previous_idx]
+#define previous_idx	(current_idx ^ 1)
+#define SWAP_SLOTS()	current_idx ^= 1;
+
 
 #define SLEEP_TIME_MS 1000
 void SavestateThread(void)
@@ -43,36 +62,71 @@ void SavestateThread(void)
 	Common::SetCurrentThreadName("Savestate thread");
 	Common::SleepCurrentThread(200);
 
-	u8 current_slot = 0;
-	u8 previous_slot = 0;
 	bool paused;
+	open_vcdiff::VCDiffDecoder decoder;
+
 	while (true)
 	{
 		paused = (Core::GetState() == Core::CORE_PAUSE);
 
-		if (!paused && inReplay) 
+		// Handle rewind request
+		if (!paused && g_rewindRequested)
 		{
-				INFO_LOG(EXPANSIONINTERFACE, "Starting savestate");
-				State::SaveToBuffer(savestate[current_slot]);
-				INFO_LOG(EXPANSIONINTERFACE, "Slot %d,  size: %08x", current_slot, savestate[current_slot].size());
+			int numStates = 8;
 
-				previous_slot = (current_slot ^ 1);
-				if (savestate[previous_slot].size() != 0)
+			// Jump some number of states behind CURRENT
+			if (numStates == 1) 
+			{
+				State::LoadFromBuffer(PREVIOUS);
+			}
+			else if (numStates == 2) 
+			{
+				std::string pprev;
+				decoder.Decode((char*)PREVIOUS.data(), PREVIOUS.size(), 
+						dlog[dlog.size() - 2], &pprev);
+				std::vector<u8> data(pprev.begin(), pprev.end());
+				State::LoadFromBuffer(data);
+
+			}
+			else if (numStates >= 3)
+			{
+				int off = 2;
+				for (int x = (numStates - 1); x > 0; x--) 
 				{
-					open_vcdiff::VCDiffEncoder encoder((char*)savestate[current_slot].data(), savestate[current_slot].size());
-					std::string delta = std::string();
-					encoder.Encode((char*)savestate[previous_slot].data(), savestate[previous_slot].size(), &delta);
-					dlog.push_back(delta);
-					INFO_LOG(EXPANSIONINTERFACE, "Delta size: %08x", delta.size());
+					std::string targ;
+					decoder.Decode((char*)PREVIOUS.data(), PREVIOUS.size(), 
+							dlog[dlog.size() - off], &targ);
+					std::vector<u8> vec(targ.begin(), targ.end());
+					CURRENT.swap(vec);
+					SWAP_SLOTS();
+					off++;
 				}
-
-				// Switch the current slot
-				current_slot = previous_slot;
-
-				INFO_LOG(EXPANSIONINTERFACE, "Savestate done!");
+				State::LoadFromBuffer(PREVIOUS);
+			}
+			g_rewindRequested = false;
+			continue;
 		}
 
-		// If we aren't playing a replay, free up slots and the delta log?
+		// Take a savestate
+		if (!paused && inReplay) 
+		{
+			// Save to the current slot
+			SWAP_SLOTS();
+			State::SaveToBuffer(CURRENT);
+			INFO_LOG(EXPANSIONINTERFACE, "Slot %d,  size: %08x", current_idx, CURRENT.size());
+
+			// If the previous slot exists, make a diff
+			if (PREVIOUS.size() != 0)
+			{
+				open_vcdiff::VCDiffEncoder encoder((char*)CURRENT.data(), CURRENT.size());
+				std::string delta = std::string();
+				encoder.Encode((char*)PREVIOUS.data(), PREVIOUS.size(), &delta);
+				dlog.push_back(delta);
+				INFO_LOG(EXPANSIONINTERFACE, "Delta size: %08x", delta.size());
+			}
+		}
+
+		// Clear data after playback is finished
 		if (!inReplay) 
 		{
 			if (savestate[0].size() != 0)
@@ -84,6 +138,8 @@ void SavestateThread(void)
 			if (dlog.size() != 0)
 				INFO_LOG(EXPANSIONINTERFACE, "Cleared dlog (%d entries)", dlog.size());
 				std::vector<std::string>().swap(dlog);
+			if (current_idx != 0)
+				current_idx = 0;
 		}
 		Common::SleepCurrentThread(SLEEP_TIME_MS);
 	}
