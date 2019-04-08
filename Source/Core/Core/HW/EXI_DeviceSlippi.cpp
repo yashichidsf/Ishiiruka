@@ -33,33 +33,24 @@
 #include <google/vcencoder.h>
 #include <google/vcdecoder.h>
 
-static std::vector<std::string> dlog;
-static std::map<int, std::string> state_log;
+// A map of "diffs between the initial state and some state", 
+// keyed by the frame number corresponding to the state
+static std::map<int32_t, std::string> state_log;
 
-static bool inReplay = false;
-bool g_rewindRequested = false;
+static bool inReplay = false;	// Are we playing back a replay?
+bool g_rewindRequested = false; // Did the user request a rewind?
+static std::vector<u8> iState;	// The initial state
+static std::vector<u8> cState;	// The current (latest) state
 
+// Interval between savestates
+#define NUM_FRAMES 123
 
-/* We use two buffers to handle the current and previous savestate. CURRENT 
- * refers to the latest state. PREVIOUS refers to the last state. In order to 
- * preserve this behaviour, SWAP_SLOTS() should always be called immediately 
- * before you change the contents of 'CURRENT'.
- */
-
-static std::vector<u8> savestate[2];
-static u8 current_idx = 0;
 static int32_t currentPlaybackFrame = -INT_MAX;
 static int32_t latestStateFrame = -INT_MAX;
-
-#define NUM_FRAMES	120
-
-#define CURRENT		savestate[current_idx]
-#define PREVIOUS	savestate[previous_idx]
-#define previous_idx	(current_idx ^ 1)
-#define SWAP_SLOTS()	current_idx ^= 1;
-
+static int32_t initialStateFrame = -NUM_FRAMES;	
 
 #define SLEEP_TIME_MS 8
+
 void SavestateThread(void)
 {
 	// We crash if I don't sleep here?
@@ -67,122 +58,88 @@ void SavestateThread(void)
 	Common::SleepCurrentThread(200);
 
 	bool paused;
+	bool haveInitialState = false;
 	open_vcdiff::VCDiffDecoder decoder;
 
 	while (true)
 	{
 		paused = (Core::GetState() == Core::CORE_PAUSE);
 
-		// Handle rewind request
+		// Handle a rewind request
 		if (!paused && g_rewindRequested)
 		{
 			bool pause = Core::PauseAndLock(true);
-			int numStates = 8;
+			INFO_LOG(EXPANSIONINTERFACE, "Rewind started");
 
-			int previousStateFrame = latestStateFrame - NUM_FRAMES;
-			int targetStateFrame = latestStateFrame - (NUM_FRAMES * numStates);
-			
-			INFO_LOG(EXPANSIONINTERFACE, "Rewind (latestFrame=%d, previousFrame=%d, targetFrame=%d)",
-					latestStateFrame, previousStateFrame, targetStateFrame);
+			int numStates = 5;
 
-			// Special case: just restore the previous state
-			if (numStates == 1) 
-			{
-				State::LoadFromBuffer(PREVIOUS);
-				g_rewindRequested = false;
-				Core::PauseAndLock(false, pause);
-				continue;
-			}
+			int closestStateFrame = currentPlaybackFrame - (currentPlaybackFrame % NUM_FRAMES);
+			int targetStateFrame = closestStateFrame - (NUM_FRAMES * numStates);
+			INFO_LOG(EXPANSIONINTERFACE, "[currentPlaybackFrame=%d] Rewind (targetFrame=%d)", 
+					currentPlaybackFrame, targetStateFrame);
 
-			// Special case: use the diff for PREVIOUS
-			if (numStates == 2) 
-			{
-				std::string pprev;
-				decoder.Decode((char*)PREVIOUS.data(), PREVIOUS.size(),
-						state_log[previousStateFrame], &pprev);
-				std::vector<u8> data(pprev.begin(), pprev.end());
-				State::LoadFromBuffer(data);
-				g_rewindRequested = false;
-				Core::PauseAndLock(false, pause);
-				continue;
-
-			}
-
-			// Restore to some far state (numStates >= 3)
-			for (int idx = previousStateFrame; idx >= targetStateFrame; idx -= NUM_FRAMES) 
-			{
-				INFO_LOG(EXPANSIONINTERFACE, "  Rebuilding targetFrame=%d ..", idx);
-				std::string targ;
-				decoder.Decode((char*)PREVIOUS.data(), PREVIOUS.size(), 
-						state_log[idx], &targ);
-				std::vector<u8> vec(targ.begin(), targ.end());
-				CURRENT.swap(vec);
-				SWAP_SLOTS();
-			}
-			State::LoadFromBuffer(PREVIOUS);
+			std::string targ;
+			decoder.Decode((char*)iState.data(), iState.size(),
+					state_log[targetStateFrame], &targ);
+			std::vector<u8> vec(targ.begin(), targ.end());
+			State::LoadFromBuffer(vec);
 			g_rewindRequested = false;
+
 			Core::PauseAndLock(false, pause);
+			INFO_LOG(EXPANSIONINTERFACE, "Rewind completed");
 			continue;
 		}
 
-		// Create a new savestate
+		// Update the current state
 		if (!paused && inReplay)
 		{
-		       	if (((currentPlaybackFrame % NUM_FRAMES) == 0) && (state_log.count(currentPlaybackFrame) == 0))
+			// Take the initial state at frame -123
+		       	if ((currentPlaybackFrame == -123) && (!haveInitialState))
+			{
+				State::SaveToBuffer(iState);
+				INFO_LOG(EXPANSIONINTERFACE, "[frame=%d] Initial state size=%08x", currentPlaybackFrame, iState.size());
+				haveInitialState = true;
+				continue;
+			}
+
+		       	if (((currentPlaybackFrame % NUM_FRAMES) == 0) && (state_log.count(currentPlaybackFrame) == 0) && (currentPlaybackFrame != -123))
 			{
 				latestStateFrame = currentPlaybackFrame;
-				// Save to the current slot
-				SWAP_SLOTS();
-				State::SaveToBuffer(CURRENT);
-				INFO_LOG(EXPANSIONINTERFACE, "[frame=%d] Slot %d,  size: %08x", 
-						latestStateFrame, current_idx, CURRENT.size());
+				State::SaveToBuffer(cState);
+				INFO_LOG(EXPANSIONINTERFACE, "[frame=%d] Current state size=%08x", latestStateFrame, cState.size());
 
-				// Given CURRENT (latestStateFrame), the diff at state_log[latestStateFrame] is 
-				// used to re-construct the state at PREVIOUS (latestStateFrame - NUM_FRAMES)
-				if (PREVIOUS.size() != 0)
-				{
-					open_vcdiff::VCDiffEncoder encoder((char*)CURRENT.data(), CURRENT.size());
-					//std::string delta = std::string();
-					//encoder.Encode((char*)PREVIOUS.data(), PREVIOUS.size(), &delta);
-					//state_log[latestStateFrame] = delta;
-					//dlog.push_back(delta);
-					//INFO_LOG(EXPANSIONINTERFACE, "Delta size: %08x", delta.size());
-
-					std::string delta = std::string();
-					encoder.Encode((char*)PREVIOUS.data(), PREVIOUS.size(), &delta);
-					state_log[latestStateFrame] = delta;
-					INFO_LOG(EXPANSIONINTERFACE, "Saved diff to state_log[%d], size=%08x", 
-							latestStateFrame, state_log[latestStateFrame].size());
-				}
+				open_vcdiff::VCDiffEncoder encoder((char*)iState.data(), iState.size());
+				std::string delta = std::string();
+				encoder.Encode((char*)cState.data(), cState.size(), &delta);
+				state_log[latestStateFrame] = delta;
+				INFO_LOG(EXPANSIONINTERFACE, "Saved diff to state_log[%d], size=%08x", 
+						latestStateFrame, state_log[latestStateFrame].size());
 			}
 		}
 
 		// Make sure our state is reset when playback is pending/finished
 		if (!inReplay) 
 		{
-			if (savestate[0].size() != 0) {
+			if (iState.size() != 0) {
 				INFO_LOG(EXPANSIONINTERFACE, "Cleared slot 0");
-				std::vector<u8>().swap(savestate[0]);
+				std::vector<u8>().swap(iState);
 			}
-			if (savestate[1].size() != 0) {
+			if (cState.size() != 0) {
 				INFO_LOG(EXPANSIONINTERFACE, "Cleared slot 1");
-				std::vector<u8>().swap(savestate[1]);
-			}
-			if (dlog.size() != 0) {
-				INFO_LOG(EXPANSIONINTERFACE, "Cleared dlog (%d entries)", dlog.size());
-				std::vector<std::string>().swap(dlog);
+				std::vector<u8>().swap(cState);
 			}
 			if (state_log.size() != 0) {
 				INFO_LOG(EXPANSIONINTERFACE, "Cleared state_log (%d entries)", state_log.size());
 				std::map<int32_t, std::string>().swap(state_log);
 			}
 
-			if (current_idx != 0)
-				current_idx = 0;
 			if (currentPlaybackFrame != -INT_MAX)
 				currentPlaybackFrame = -INT_MAX;
 			if (latestStateFrame != -INT_MAX)
 				latestStateFrame = -INT_MAX;
+
+			if (haveInitialState)
+				haveInitialState = false;
 		}
 		Common::SleepCurrentThread(SLEEP_TIME_MS);
 	}
