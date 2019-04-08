@@ -34,7 +34,7 @@
 #include <google/vcdecoder.h>
 
 static std::vector<std::string> dlog;
-//static std::map<u32, std::string> state_log;
+static std::map<int, std::string> state_log;
 
 static bool inReplay = false;
 bool g_rewindRequested = false;
@@ -48,6 +48,10 @@ bool g_rewindRequested = false;
 
 static std::vector<u8> savestate[2];
 static u8 current_idx = 0;
+static int32_t currentPlaybackFrame = -INT_MAX;
+static int32_t latestStateFrame = -INT_MAX;
+
+#define NUM_FRAMES	120
 
 #define CURRENT		savestate[current_idx]
 #define PREVIOUS	savestate[previous_idx]
@@ -55,7 +59,7 @@ static u8 current_idx = 0;
 #define SWAP_SLOTS()	current_idx ^= 1;
 
 
-#define SLEEP_TIME_MS 1000
+#define SLEEP_TIME_MS 8
 void SavestateThread(void)
 {
 	// We crash if I don't sleep here?
@@ -72,74 +76,113 @@ void SavestateThread(void)
 		// Handle rewind request
 		if (!paused && g_rewindRequested)
 		{
+			bool pause = Core::PauseAndLock(true);
 			int numStates = 8;
 
-			// Jump some number of states behind CURRENT
+			int previousStateFrame = latestStateFrame - NUM_FRAMES;
+			int targetStateFrame = latestStateFrame - (NUM_FRAMES * numStates);
+			
+			INFO_LOG(EXPANSIONINTERFACE, "Rewind (latestFrame=%d, previousFrame=%d, targetFrame=%d)",
+					latestStateFrame, previousStateFrame, targetStateFrame);
+
+			// Special case: just restore the previous state
 			if (numStates == 1) 
 			{
 				State::LoadFromBuffer(PREVIOUS);
+				g_rewindRequested = false;
+				Core::PauseAndLock(false, pause);
+				continue;
 			}
-			else if (numStates == 2) 
+
+			// Special case: use the diff for PREVIOUS
+			if (numStates == 2) 
 			{
 				std::string pprev;
-				decoder.Decode((char*)PREVIOUS.data(), PREVIOUS.size(), 
-						dlog[dlog.size() - 2], &pprev);
+				decoder.Decode((char*)PREVIOUS.data(), PREVIOUS.size(),
+						state_log[previousStateFrame], &pprev);
 				std::vector<u8> data(pprev.begin(), pprev.end());
 				State::LoadFromBuffer(data);
+				g_rewindRequested = false;
+				Core::PauseAndLock(false, pause);
+				continue;
 
 			}
-			else if (numStates >= 3)
+
+			// Restore to some far state (numStates >= 3)
+			for (int idx = previousStateFrame; idx >= targetStateFrame; idx -= NUM_FRAMES) 
 			{
-				int off = 2;
-				for (int x = (numStates - 1); x > 0; x--) 
-				{
-					std::string targ;
-					decoder.Decode((char*)PREVIOUS.data(), PREVIOUS.size(), 
-							dlog[dlog.size() - off], &targ);
-					std::vector<u8> vec(targ.begin(), targ.end());
-					CURRENT.swap(vec);
-					SWAP_SLOTS();
-					off++;
-				}
-				State::LoadFromBuffer(PREVIOUS);
+				INFO_LOG(EXPANSIONINTERFACE, "  Rebuilding targetFrame=%d ..", idx);
+				std::string targ;
+				decoder.Decode((char*)PREVIOUS.data(), PREVIOUS.size(), 
+						state_log[idx], &targ);
+				std::vector<u8> vec(targ.begin(), targ.end());
+				CURRENT.swap(vec);
+				SWAP_SLOTS();
 			}
+			State::LoadFromBuffer(PREVIOUS);
 			g_rewindRequested = false;
+			Core::PauseAndLock(false, pause);
 			continue;
 		}
 
-		// Take a savestate
-		if (!paused && inReplay) 
+		// Create a new savestate
+		if (!paused && inReplay)
 		{
-			// Save to the current slot
-			SWAP_SLOTS();
-			State::SaveToBuffer(CURRENT);
-			INFO_LOG(EXPANSIONINTERFACE, "Slot %d,  size: %08x", current_idx, CURRENT.size());
-
-			// If the previous slot exists, make a diff
-			if (PREVIOUS.size() != 0)
+		       	if (((currentPlaybackFrame % NUM_FRAMES) == 0) && (state_log.count(currentPlaybackFrame) == 0))
 			{
-				open_vcdiff::VCDiffEncoder encoder((char*)CURRENT.data(), CURRENT.size());
-				std::string delta = std::string();
-				encoder.Encode((char*)PREVIOUS.data(), PREVIOUS.size(), &delta);
-				dlog.push_back(delta);
-				INFO_LOG(EXPANSIONINTERFACE, "Delta size: %08x", delta.size());
+				latestStateFrame = currentPlaybackFrame;
+				// Save to the current slot
+				SWAP_SLOTS();
+				State::SaveToBuffer(CURRENT);
+				INFO_LOG(EXPANSIONINTERFACE, "[frame=%d] Slot %d,  size: %08x", 
+						latestStateFrame, current_idx, CURRENT.size());
+
+				// Given CURRENT (latestStateFrame), the diff at state_log[latestStateFrame] is 
+				// used to re-construct the state at PREVIOUS (latestStateFrame - NUM_FRAMES)
+				if (PREVIOUS.size() != 0)
+				{
+					open_vcdiff::VCDiffEncoder encoder((char*)CURRENT.data(), CURRENT.size());
+					//std::string delta = std::string();
+					//encoder.Encode((char*)PREVIOUS.data(), PREVIOUS.size(), &delta);
+					//state_log[latestStateFrame] = delta;
+					//dlog.push_back(delta);
+					//INFO_LOG(EXPANSIONINTERFACE, "Delta size: %08x", delta.size());
+
+					std::string delta = std::string();
+					encoder.Encode((char*)PREVIOUS.data(), PREVIOUS.size(), &delta);
+					state_log[latestStateFrame] = delta;
+					INFO_LOG(EXPANSIONINTERFACE, "Saved diff to state_log[%d], size=%08x", 
+							latestStateFrame, state_log[latestStateFrame].size());
+				}
 			}
 		}
 
-		// Clear data after playback is finished
+		// Make sure our state is reset when playback is pending/finished
 		if (!inReplay) 
 		{
-			if (savestate[0].size() != 0)
+			if (savestate[0].size() != 0) {
 				INFO_LOG(EXPANSIONINTERFACE, "Cleared slot 0");
 				std::vector<u8>().swap(savestate[0]);
-			if (savestate[1].size() != 0)
+			}
+			if (savestate[1].size() != 0) {
 				INFO_LOG(EXPANSIONINTERFACE, "Cleared slot 1");
 				std::vector<u8>().swap(savestate[1]);
-			if (dlog.size() != 0)
+			}
+			if (dlog.size() != 0) {
 				INFO_LOG(EXPANSIONINTERFACE, "Cleared dlog (%d entries)", dlog.size());
 				std::vector<std::string>().swap(dlog);
+			}
+			if (state_log.size() != 0) {
+				INFO_LOG(EXPANSIONINTERFACE, "Cleared state_log (%d entries)", state_log.size());
+				std::map<int32_t, std::string>().swap(state_log);
+			}
+
 			if (current_idx != 0)
 				current_idx = 0;
+			if (currentPlaybackFrame != -INT_MAX)
+				currentPlaybackFrame = -INT_MAX;
+			if (latestStateFrame != -INT_MAX)
+				latestStateFrame = -INT_MAX;
 		}
 		Common::SleepCurrentThread(SLEEP_TIME_MS);
 	}
@@ -730,6 +773,9 @@ void CEXISlippi::prepareFrameData(u8 *payload)
 
 	// Return success code
 	m_read_queue.push_back(requestResultCode);
+
+
+	currentPlaybackFrame = frameIndex;
 
 	// Add frame data for every character
 	for (u8 port = 0; port < 4; port++)
