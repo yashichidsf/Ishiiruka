@@ -157,6 +157,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cubeb", "..\Externals\cubeb
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "nlohmann", "..\Externals\nlohmann\nlohmann.vcxproj", "{732D2110-06A3-4AA1-9634-7BB5A4F75B82}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "open-vcdiff", "..\Externals\open-vcdiff\build\open-vcdiff.vcxproj", "{EA33148E-C751-471D-AAE8-D3793BF1A0D4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -397,6 +399,14 @@ Global
 		{732D2110-06A3-4AA1-9634-7BB5A4F75B82}.Release|x64.Build.0 = Release|x64
 		{732D2110-06A3-4AA1-9634-7BB5A4F75B82}.Release|x86.ActiveCfg = Release|Win32
 		{732D2110-06A3-4AA1-9634-7BB5A4F75B82}.Release|x86.Build.0 = Release|Win32
+		{EA33148E-C751-471D-AAE8-D3793BF1A0D4}.Debug|x64.ActiveCfg = Debug|x64
+		{EA33148E-C751-471D-AAE8-D3793BF1A0D4}.Debug|x64.Build.0 = Debug|x64
+		{EA33148E-C751-471D-AAE8-D3793BF1A0D4}.Debug|x86.ActiveCfg = Debug|Win32
+		{EA33148E-C751-471D-AAE8-D3793BF1A0D4}.Debug|x86.Build.0 = Debug|Win32
+		{EA33148E-C751-471D-AAE8-D3793BF1A0D4}.Release|x64.ActiveCfg = Release|x64
+		{EA33148E-C751-471D-AAE8-D3793BF1A0D4}.Release|x64.Build.0 = Release|x64
+		{EA33148E-C751-471D-AAE8-D3793BF1A0D4}.Release|x86.ActiveCfg = Release|Win32
+		{EA33148E-C751-471D-AAE8-D3793BF1A0D4}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -436,6 +446,7 @@ Global
 		{FF39260B-839A-4A6C-A117-CAA73C1683F5} = {39DB5AF5-003D-412B-8FF1-FB195541DB7A}
 		{8EA11166-6512-44FC-B7A5-A4D1ECC81170} = {39DB5AF5-003D-412B-8FF1-FB195541DB7A}
 		{732D2110-06A3-4AA1-9634-7BB5A4F75B82} = {39DB5AF5-003D-412B-8FF1-FB195541DB7A}
+		{EA33148E-C751-471D-AAE8-D3793BF1A0D4} = {39DB5AF5-003D-412B-8FF1-FB195541DB7A}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0ABE564D-D33A-4999-8E79-2A81739F0A18}
