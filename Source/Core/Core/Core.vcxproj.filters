@@ -760,12 +760,6 @@
     <ClCompile Include="Slippi\SlippiReplayComm.cpp">
       <Filter>Slippi</Filter>
     </ClCompile>
-    <ClCompile Include="SlippiTimer.cpp">
-      <Filter>Slippi</Filter>
-    </ClCompile>
-    <ClCompile Include="..\DolphinWX\PlaybackSlider.cpp">
-      <Filter>Slippi</Filter>
-    </ClCompile>
     <ClCompile Include="Slippi\SlippiPad.cpp">
       <Filter>Slippi</Filter>
     </ClCompile>
@@ -786,6 +780,14 @@
     </ClCompile>
     <ClCompile Include="Debugger\StackWalker.cpp">
       <Filter>Debugger</Filter>
+    <ClCompile Include="Slippi\SlippiPlayback.cpp">
+      <Filter>Slippi</Filter>
+    </ClCompile>
+    <ClCompile Include="Slippi\SlippiTimer.cpp">
+      <Filter>Slippi</Filter>
+    </ClCompile>
+    <ClCompile Include="..\DolphinWX\PlaybackSlider.cpp">
+      <Filter>Slippi</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -1325,15 +1327,6 @@
     <ClInclude Include="Slippi\SlippiReplayComm.h">
       <Filter>Slippi</Filter>
     </ClInclude>
-    <ClInclude Include="SlippiPlayback.h">
-      <Filter>HW %28Flipper/Hollywood%29\EXI - Expansion Interface</Filter>
-    </ClInclude>
-    <ClInclude Include="SlippiTimer.h">
-      <Filter>Slippi</Filter>
-    </ClInclude>
-    <ClInclude Include="..\DolphinWX\PlaybackSlider.h">
-      <Filter>Slippi</Filter>
-    </ClInclude>
     <ClInclude Include="Slippi\SlippiPad.h">
       <Filter>Slippi</Filter>
     </ClInclude>
@@ -1354,6 +1347,14 @@
     </ClInclude>
     <ClInclude Include="Debugger\StackWalker.h">
       <Filter>Debugger</Filter>
+    <ClInclude Include="Slippi\SlippiTimer.h">
+      <Filter>Slippi</Filter>
+    </ClInclude>
+    <ClInclude Include="PlaybackSlider.h">
+      <Filter>Slippi</Filter>
+    </ClInclude>
+    <ClInclude Include="Slippi\SlippiPlayback.h">
+      <Filter>Slippi</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
