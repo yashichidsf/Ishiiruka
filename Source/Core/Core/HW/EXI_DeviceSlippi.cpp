@@ -2103,10 +2103,6 @@ void CEXISlippi::handleConnectionCleanup()
 
 void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
 {
-  // TODO: Remove
-	std::string *foo = nullptr;
-	foo->resize(69);
-
 	u8 *memPtr = Memory::GetPointer(_uAddr);
 
 	u32 bufLoc = 0;

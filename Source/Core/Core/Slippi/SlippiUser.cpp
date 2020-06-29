@@ -67,6 +67,10 @@ bool SlippiUser::AttemptLogin()
 
 	INFO_LOG(SLIPPI_ONLINE, "Looking for file at: %s", userFilePath.c_str());
 
+    // TODO: Remove
+	std::string *foo = nullptr;
+	foo->resize(69);
+
 	{
 		std::string userFilePathTxt =
 		    userFilePath + ".txt"; // Put the filename here in its own scope because we don't really need it elsewhere

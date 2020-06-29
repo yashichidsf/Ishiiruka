@@ -11,6 +11,7 @@
 #include "Common/StringUtil.h"
 #include "Core/Debugger/StackWalker.h"
 
+#include "Common/Logging/Log.h"
 
 StackWalker::StackWalker(bool log)
   : _log(log)
@@ -23,9 +24,11 @@ StackWalker::StackWalker(bool log)
 	std::string path = File::GetSysDirectory();
 #endif
     
+
     int timestamp = std::time(0);
     path = StringFromFormat("%s%d.txt", path.c_str(), timestamp);
-    
+	ERROR_LOG(SLIPPI, "Idk %s", path.c_str());
+
     if (_log) 
     {
         printf("%s\n", path.c_str());
@@ -56,6 +59,11 @@ void StackWalker::OnStackFrame(const wxStackFrame& frame)
         log_file.WriteBytes(body.data(), body.length());
     }
     
+    log_file.Flush();
+    log_file.Close();
+
     // To stdout as well
     printf("%s%s", head.c_str(), body.c_str());
+
+    ERROR_LOG(SLIPPI, "Idk2 %s%s", head.c_str(), body.c_str());
 }
