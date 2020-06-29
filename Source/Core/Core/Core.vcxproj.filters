@@ -784,6 +784,9 @@
     <ClCompile Include="Slippi\SlippiUser.cpp">
       <Filter>Slippi</Filter>
     </ClCompile>
+    <ClCompile Include="Debugger\StackWalker.cpp">
+      <Filter>Debugger</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BootManager.h" />
@@ -1348,6 +1351,9 @@
     </ClInclude>
     <ClInclude Include="Slippi\SlippiUser.h">
       <Filter>Slippi</Filter>
+    </ClInclude>
+    <ClInclude Include="Debugger\StackWalker.h">
+      <Filter>Debugger</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
