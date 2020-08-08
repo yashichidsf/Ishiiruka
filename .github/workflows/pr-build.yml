@@ -48,6 +48,7 @@ jobs:
           msbuild /p:Configuration=Release /p:Platform=x64 ${{ github.workspace }}\Source\Dolphin.sln
       - name: "Build Updater"
         working-directory: ${{ github.workspace }}
+        shell: powershell
         run: |
           cd %GOPATH%
           git clone https://github.com/project-slippi/dolphin-slippi-tools
