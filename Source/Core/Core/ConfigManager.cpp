@@ -328,6 +328,7 @@ void SConfig::SaveMovieSettings(IniFile& ini)
 	movie->Set("Author", m_strMovieAuthor);
 	movie->Set("DumpFrames", m_DumpFrames);
 	movie->Set("DumpFramesSilent", m_DumpFramesSilent);
+	movie->Set("DumpSeparate", m_DumpSeparateFiles);
 	movie->Set("ShowInputDisplay", m_ShowInputDisplay);
 	movie->Set("ShowRTC", m_ShowRTC);
 }
@@ -680,6 +681,7 @@ void SConfig::LoadMovieSettings(IniFile& ini)
 	movie->Get("Author", &m_strMovieAuthor, "");
 	movie->Get("DumpFrames", &m_DumpFrames, false);
 	movie->Get("DumpFramesSilent", &m_DumpFramesSilent, false);
+	movie->Get("DumpSeparate", &m_DumpSeparateFiles, false);
 	movie->Get("ShowInputDisplay", &m_ShowInputDisplay, false);
 	movie->Get("ShowRTC", &m_ShowRTC, false);
 }
