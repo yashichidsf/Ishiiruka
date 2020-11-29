@@ -201,6 +201,10 @@ protected:
 	SettingCheckBox* validation_layer;
 	SettingCheckBox* backend_multithreading;
 
+	void OnDumpBitrateChanged(wxCommandEvent& ev);
+	wxSpinCtrl* dump_bitrate_value;
+	wxStaticText* dump_bitrate_label;
+
 	std::map<wxWindow*, wxString> ctrl_descs; // maps setting controls to their descriptions
 	std::map<wxWindow*, wxStaticText*> desc_texts; // maps dialog tabs (which are the parents of the setting controls) to their description text objects
 

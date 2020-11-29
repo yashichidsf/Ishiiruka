@@ -186,6 +186,7 @@ static wxString internal_resolution_frame_dumping_desc = _(
 	"image will be scaled horizontally to preserve the vertical resolution.\n\nIf unsure, leave "
 	"this unchecked.");
 static wxString dump_frames_desc = _("Dump all rendered frames to an AVI file in User/Dump/Frames/\n\nIf unsure, leave this unchecked.");
+static wxString dump_frames_bitrate_desc = _("Sets the bitrate for frame dumping. Higher values will produce better quality dumps.");
 #if !defined WIN32 && defined HAVE_LIBAV
 static wxString use_ffv1_desc = _("Encode frame dumps using the FFV1 codec.\n\nIf unsure, leave this unchecked.");
 #endif
@@ -958,12 +959,6 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string &title)
 			cache_hires_textures = CreateCheckBox(page_advanced, _("Prefetch Custom Textures"), cache_hires_textures_desc, vconfig.bCacheHiresTextures);
 			hires_texturemaps = CreateCheckBox(page_advanced, _("Load Custom Material Maps"), load_hires_material_maps_desc, vconfig.bHiresMaterialMaps);
 			szr_utility->Add(cache_hires_textures);
-			if (vconfig.backend_info.bSupportsInternalResolutionFrameDumps)
-			{
-				szr_utility->Add(CreateCheckBox(page_advanced, _("Full Resolution Frame Dumps"),
-					wxGetTranslation(internal_resolution_frame_dumping_desc),
-					vconfig.bInternalResolutionFrameDumps));
-			}
 			szr_utility->Add(hires_texturemaps);
 			szr_utility->Add(CreateCheckBox(page_advanced, _("Dump EFB Target"), (dump_efb_desc), vconfig.bDumpEFBTarget));
 			szr_utility->Add(CreateCheckBox(page_advanced, _("Free Look"), (free_look_desc), vconfig.bFreeLook));
@@ -977,7 +972,55 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string &title)
 			szr_advanced->Add(group_utility, 0, wxEXPAND | wxALL, 5);
 			group_utility->Add(szr_utility, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 5);
 		}
+		// - dump
+		{
+			//Text fields can stretch the box size, so to maintain uniformity we take the height and
+			//subtract 16 to get the section sizer vgap, this same value is used in AddSpacer at the end
+			wxGridSizer* const szr_dump = new wxGridSizer(2, 0, 5); 
 
+			wxString v_bitrate = wxString::Format(wxT("%i"), (int)vconfig.iBitrateKbps);
+
+			dump_bitrate_label = new wxStaticText(page_advanced, wxID_ANY, _("Bitrate (kbps):"));
+			dump_bitrate_value = new wxSpinCtrl(page_advanced, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(84, 20), wxALIGN_RIGHT);
+			dump_bitrate_value->SetRange(0, INT_MAX);
+			dump_bitrate_value->SetValue(vconfig.iBitrateKbps);
+			dump_bitrate_value->Bind(wxEVT_SPINCTRL, &VideoConfigDiag::OnDumpBitrateChanged, this);
+			
+			RegisterControl(dump_bitrate_label, dump_frames_bitrate_desc);
+
+			wxGridSizer* const bitrate_dump_spin = new wxGridSizer(2, 0, 5);
+			bitrate_dump_spin->Add(dump_bitrate_label, 0);
+			bitrate_dump_spin->Add(dump_bitrate_value, 0);
+			
+			wxStaticBoxSizer* const group_dump = new wxStaticBoxSizer(wxVERTICAL, page_advanced, _("Frame Dumping"));	
+			
+			bool testBoolDump = 0;
+			bool testBoolDump2 = 0;
+			bool testBoolDump3 = 0;
+
+			if (vconfig.backend_info.bSupportsInternalResolutionFrameDumps)
+			{
+				szr_dump->Add(CreateCheckBox(page_advanced, _("Full Resolution Frame Dumps"),
+					wxGetTranslation(internal_resolution_frame_dumping_desc),
+					vconfig.bInternalResolutionFrameDumps));
+			}
+
+			//mute_audio_dump_checkbox = new wxCheckBox(page_advanced, wxID_ANY, _("Mute Audio While Dumping"));
+			//RegisterControl(mute_audio_dump_checkbox, (dump_mute_audio_desc));
+			//mute_audio_dump_checkbox->Bind(wxEVT_CHECKBOX, &VideoConfigDiag::Event_MuteAudioDump, this);
+			//mute_audio_dump_checkbox->SetValue(SConfig::GetInstance().m_DumpMutePlayback);
+
+			//szr_dump->Add(CreateCheckBox(page_advanced, _("Split Dump on New Replay"), (dump_separate_desc), SConfig::GetInstance().m_DumpSeparateFiles));
+			//szr_dump->Add(mute_audio_dump_checkbox);
+			//szr_dump->Add(CreateCheckBox(page_advanced, _("Mute Audio While Dumping"), (dump_mute_audio_desc), SConfig::GetInstance().m_DumpMutePlayback));
+			//szr_dump->Add(CreateCheckBox(page_advanced, _("Use Replay Filename"), (dump_replay_filename_desc), SConfig::GetInstance().m_DumpReplayFilename));
+			szr_dump->Add(bitrate_dump_spin);
+
+			szr_advanced->Add(group_dump, 0, wxEXPAND | wxALL, 5);
+			group_dump->Add(szr_dump, 1, wxEXPAND | wxLEFT | wxRIGHT, 5);
+			//group_dump->AddSpacer(1); //Text height - 16
+			
+		}
 		// - misc
 		{
 			wxGridSizer* const szr_misc = new wxGridSizer(2, 5, 5);
@@ -1695,6 +1738,12 @@ void VideoConfigDiag::PopulateAAList()
 
 	choice_aamode->SetSelection(selected_mode_index);
 }
+
+void VideoConfigDiag::OnDumpBitrateChanged(wxCommandEvent& ev)
+{
+	vconfig.iBitrateKbps = dump_bitrate_value->GetValue();
+}
+
 
 void VideoConfigDiag::OnAAChanged(wxCommandEvent& ev)
 {
