@@ -382,6 +382,20 @@ void AVIDump::AddFrame(const u8* data, int width, int height, int stride, const 
 	}
 	if (error)
 		ERROR_LOG(VIDEO, "Error while encoding video: %d", error);
+	
+#ifdef IS_PLAYBACK //For separate file dumps. Check if last frame before performing more intensive checks
+	if(g_replayComm->current.endFrame == g_playbackStatus->currentPlaybackFrame + 1) //TODO: better solution than currentPlaybackFrame + 1
+	{
+		//Check if user wants separate files for each replay and makes sure current replay is not last in queue
+		if(SConfig::GetInstance().m_DumpSeparateFiles && g_replayComm->getSettings().queue.back().index != g_replayComm->current.index)
+		{
+			int temp_file_index = s_file_index;
+			Stop();
+			s_file_index = temp_file_index + 1;
+			CreateVideoFile();
+		}
+	}
+#endif
 }
 
 static void HandleDelayedPackets()
